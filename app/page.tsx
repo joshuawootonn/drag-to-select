@@ -1,113 +1,121 @@
-import Image from "next/image";
+"use client";
+
+import { PointerEvent, useState } from "react";
+import clsx from "clsx";
+
+type Point = { x: number; y: number };
+
+const areOverlapping = (rect1: DOMRect, rect2: DOMRect) => {
+  if (rect1.right < rect2.left || rect2.right < rect1.left) {
+    return false;
+  }
+
+  if (rect1.bottom < rect2.top || rect2.bottom < rect1.top) {
+    return false;
+  }
+
+  return true;
+};
+
+const createDomRectFromTwoPoints = (start: Point, end: Point): DOMRect => {
+  const top = Math.min(start.y, end.y);
+  const left = Math.min(start.x, end.x);
+  const width = Math.abs(start.x - end.x);
+  const height = Math.abs(start.y - end.y);
+
+  return new DOMRect(left, top, width, height);
+};
 
 export default function Home() {
+  const [dragStartPoint, setDragStartPoint] = useState<Point | null>(null);
+  const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
+
+  const [currentDragSelectedIds, setCurrentDragSelectedIds] = useState<
+    Set<number>
+  >(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <div
+      onPointerDown={(e) => {
+        setSelectionRect(new DOMRect(e.pageX, e.pageY, 0, 0));
+        setDragStartPoint({ x: e.pageX, y: e.pageY });
+
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e: PointerEvent) => {
+        if (selectionRect == null || dragStartPoint == null) return;
+
+        const next = new Set<number>(e.shiftKey ? Array.from(selectedIds) : []);
+
+        const nextSelectionRect = createDomRectFromTwoPoints(
+          {
+            y:
+              dragStartPoint.y > e.pageY
+                ? selectionRect.bottom
+                : selectionRect.top,
+            x:
+              dragStartPoint.x > e.pageX
+                ? selectionRect.right
+                : selectionRect.left,
+          },
+          {
+            x: e.pageX,
+            y: e.pageY,
+          },
+        );
+
+        e.currentTarget.querySelectorAll("[data-selectable]").forEach((el) => {
+          const rect = el.getBoundingClientRect();
+
+          if (
+            el instanceof HTMLElement &&
+            areOverlapping(selectionRect, rect) &&
+            el.dataset.selectable
+          ) {
+            next.add(parseInt(el.dataset.selectable));
+          }
+        });
+
+        setCurrentDragSelectedIds(next);
+        setSelectionRect(nextSelectionRect);
+      }}
+      onPointerUp={(e) => {
+        if (selectionRect == null) return;
+
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        setSelectedIds(currentDragSelectedIds);
+        setSelectionRect(null);
+        setDragStartPoint(null);
+      }}
+      className={clsx(
+        "flex gap-4 flex-wrap p-32 max-w-[1000px]",
+        dragStartPoint && "select-none",
+      )}
+    >
+      {new Array(4000).fill(0).map((_, i) => (
+        <div
+          data-selectable={i}
+          key={i}
+          className={clsx(
+            "h-10 w-10 shrink-0 bg-black text-white font-bold flex justify-center items-center",
+            currentDragSelectedIds.has(i) && "bg-blue-500",
+          )}
+        >
+          {i}
         </div>
-      </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-full sm:before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full sm:after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
+      ))}
+      {selectionRect && (
+        <div
+          className="fixed bg-blue-500 border-2 border-blue-700 opacity-30"
+          style={{
+            top: selectionRect.top,
+            left: selectionRect.left,
+            width: selectionRect.width,
+            height: selectionRect.height,
+          }}
         />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50 text-balance`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+      )}
+    </div>
   );
 }
